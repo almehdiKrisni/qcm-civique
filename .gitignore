@@ -1,0 +1,11 @@
+# historiques personnels exportés ou copiés depuis l'application Python
+resultats*.json
+qcm-civique-historique-*.json
+
+# divers
+__pycache__/
+*.pyc
+node_modules/
+.claude/
+.DS_Store
+Thumbs.db
