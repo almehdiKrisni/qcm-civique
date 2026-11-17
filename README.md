@@ -25,6 +25,11 @@ La liste officielle ne contient que les **énoncés**. Elle ne donne ni les choi
 
 Installer l'application sur l'écran d'accueil protège aussi l'historique : dans un simple onglet Safari, iOS peut effacer les données d'un site peu utilisé. Pensez à exporter l'historique de temps en temps.
 
+## Licence
+
+Code et contenus rédigés pour ce projet : [licence MIT](LICENSE), fournis « tels quels », sans garantie.
+Les énoncés du mode officiel proviennent d'une liste publiée par la Direction générale des étrangers en France (ministère de l'Intérieur) : ils ne sont pas couverts par cette licence et restent soumis aux conditions de réutilisation de leur source.
+
 ## Développement
 
 Aucune dépendance, aucune étape de compilation : des fichiers statiques.
