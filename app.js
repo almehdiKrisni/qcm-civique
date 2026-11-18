@@ -83,19 +83,27 @@
     return html || '<p class="tag-ok">Aucune erreur dans cette tentative, bravo !</p>';
   }
 
+  // ------------------------------------------------------------------ maîtrise
+  const masteryPct = (m) => (m.seen ? Math.round((100 * m.mastered) / m.seen) : null);
+  const masteryText = (m) => (m.seen
+    ? `Maîtrise ${masteryPct(m)} % · ${m.seen} vue${m.seen > 1 ? 's' : ''} sur ${m.total}`
+    : `Pas encore travaillée · ${m.total} questions`);
+  const meterHtml = (m) => `<div class="meter"><div class="seen" style="width:${(100 * m.seen) / m.total}%"></div>
+    <div class="done" style="width:${(100 * m.mastered) / m.total}%"></div></div>`;
+
   // ------------------------------------------------------------------ accueil
   function renderHome() {
     state.session = null;
     const bank = currentBank();
-    const rates = store.categoryRates(bank);
+    const mastery = store.mastery(bank);
+    const totals = Object.values(mastery).reduce((a, m) => ({ seen: a.seen + m.seen, mastered: a.mastered + m.mastered, total: a.total + m.total }), { seen: 0, mastered: 0, total: 0 });
     const off = state.official;
     const batchButtons = (attrs) => E.BATCH_SIZES.map((n) => `<button class="btn secondary" ${attrs} data-n="${n}">${n}</button>`).join('');
 
     const cats = Object.values(bank).map((c) => {
-      const [ok, total] = rates[c.key] || [0, 0];
-      const stat = total ? `${Math.round((100 * ok) / total)} % de réussite` : 'pas encore testée';
+      const m = mastery[c.key];
       return `<div class="cat"><div class="info"><div class="name">${esc(c.label)}</div>
-        <div class="muted small">${c.questions.length} questions · ${stat}</div></div>${batchButtons(`data-act="cat" data-key="${c.key}"`)}</div>`;
+        <div class="muted small">${masteryText(m)}</div>${meterHtml(m)}</div>${batchButtons(`data-act="cat" data-key="${c.key}"`)}</div>`;
     }).join('');
     const missed = store.missedQuestions(bank).length;
 
@@ -111,6 +119,8 @@
         <button class="btn ${off ? 'secondary' : ''}" data-act="mode" data-mode="standard">Complémentaire</button>
       </div>
       ${intro}
+      ${totals.seen ? `<div class="card progress"><div><strong>${totals.mastered}</strong> question${totals.mastered > 1 ? 's' : ''} maîtrisée${totals.mastered > 1 ? 's' : ''} sur ${totals.total}</div>
+        ${meterHtml(totals)}<div class="muted small">${totals.seen} déjà vues · maîtrisée = dernière réponse juste</div></div>` : ''}
       <label class="check"><input type="checkbox" data-change="immediate" ${state.immediate ? 'checked' : ''}>
         <span>Afficher la correction après chaque question (entraînement par catégorie)</span></label>
       <div class="card">${cats}
@@ -344,10 +354,10 @@
   function renderHistory() {
     const history = store.data.history;
     const bank = currentBank();
-    const rates = store.categoryRates(bank);
+    const mastery = store.mastery(bank);
     const rows = Object.values(bank).map((c) => {
-      const [ok, total] = rates[c.key] || [0, 0];
-      return `<div class="list-line">${esc(c.label)} : ${total ? `${Math.round((100 * ok) / total)} % (${ok}/${total} réponses)` : 'pas encore testée'}</div>`;
+      const m = mastery[c.key];
+      return `<div class="hist-cat"><div class="name">${esc(c.label)}</div><div class="muted small">${masteryText(m)}${m.seen ? ` · ${m.mastered} maîtrisée${m.mastered > 1 ? 's' : ''}` : ''}</div>${meterHtml(m)}</div>`;
     }).join('');
     const sims = history.filter((h) => h.mode === 'simulation');
     let simLine = '';
@@ -366,7 +376,8 @@
 
     show('history', `
       ${header('Historique')}
-      <div class="card"><h3 style="margin-top:0">Réussite par catégorie (${state.official ? 'examen officiel' : 'complémentaire'})</h3>${rows}${simLine}</div>
+      <div class="card"><h3 style="margin-top:0">Maîtrise par catégorie (${state.official ? 'examen officiel' : 'complémentaire'})</h3>
+        <p class="muted small">Une question est maîtrisée quand votre dernière réponse était juste. Corriger une erreur la fait remonter.</p>${rows}${simLine}</div>
       <h3>Séances (touchez-en une pour le détail)</h3>
       ${list || '<p class="muted">Aucune séance pour l\'instant.</p>'}
       <div class="actions"><button class="btn secondary" data-act="home">Accueil</button></div>`);

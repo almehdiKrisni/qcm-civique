@@ -1,7 +1,7 @@
 :root {
   --bg: #f5f6fa; --card: #ffffff; --primary: #1f4e9c; --primary-dark: #173a75;
   --text: #1b1b1b; --muted: #5b6270; --border: #dfe3ec; --btn2: #e3e7ef; --accent: #1f4e9c;
-  --good: #d4edda; --good-fg: #155724; --bad: #f8d7da; --bad-fg: #721c24;
+  --good: #d4edda; --good-fg: #155724; --bad: #f8d7da; --bad-fg: #721c24; --meter-seen: #aebfdc;
 }
 body.official {
   --bg: #ffffff; --card: #eef3fb; --primary: #0055a4; --primary-dark: #003b75;
@@ -65,6 +65,15 @@ h3 { margin: 20px 0 6px; font-size: 16px; color: var(--primary); }
 .cat .info { flex: 1; min-width: 0; }
 .cat .name { font-weight: 600; }
 .cat .btn { min-width: 46px; padding-left: 10px; padding-right: 10px; }
+
+/* maîtrise */
+.meter { position: relative; height: 6px; background: var(--btn2); border-radius: 3px; overflow: hidden; margin-top: 5px; }
+.meter > div { position: absolute; left: 0; top: 0; bottom: 0; }
+.meter .seen { background: var(--meter-seen); }
+.meter .done { background: var(--primary); }
+.card.progress { margin-top: 6px; }
+.hist-cat { padding: 6px 0; }
+.hist-cat .name { font-weight: 600; }
 
 /* question */
 .topline { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }

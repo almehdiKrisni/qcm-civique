@@ -225,6 +225,26 @@ const Engine = (() => {
       return rates;
     }
 
+    /** Maîtrise par catégorie : questions vues, maîtrisées et total.
+     *  Une question est « maîtrisée » quand sa dernière réponse était juste : elle sort des
+     *  erreurs à revoir (`missed`) dès qu'elle est réussie, donc une erreur corrigée compte. */
+    mastery(bank) {
+      const res = {};
+      Object.values(bank).forEach((cat) => {
+        let seen = 0;
+        let mastered = 0;
+        cat.questions.forEach((q) => {
+          const st = this.data.stats[q.id];
+          const wrongNow = q.id in this.data.missed;
+          if (!((st && st.ok + st.ko > 0) || wrongNow)) return;
+          seen += 1;
+          if (!wrongNow) mastered += 1;
+        });
+        res[cat.key] = { seen, mastered, total: cat.questions.length };
+      });
+      return res;
+    }
+
     exportJSON() {
       return JSON.stringify(this.data, null, 1);
     }

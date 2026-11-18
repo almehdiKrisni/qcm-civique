@@ -74,6 +74,22 @@ assert.strictEqual(entry.score, 5, 'le score initial reste celui de la 1re tenta
 const rates = store.categoryRates(std);
 assert.deepStrictEqual(rates.histoire, [5, 10]);
 
+// maîtrise : 10 questions vues dont toutes maîtrisées après correction des erreurs
+let m = store.mastery(std).histoire;
+assert.deepStrictEqual([m.seen, m.mastered, m.total], [10, 10, 40]);
+// une erreur non corrigée fait baisser la maîtrise, sans toucher aux catégories non travaillées
+const lone = new E.Store({ getItem: () => null, setItem: () => {} });
+const sample4 = E.pickBatch(std.culture.questions, 4, E.makeRng(9)).map((q, i) => answer(E.present(q, rng), i === 0));
+lone.recordSession('categorie', 'Culture', sample4, 10);
+m = lone.mastery(std).culture;
+assert.deepStrictEqual([m.seen, m.mastered, m.total], [4, 3, 40]);
+assert.deepStrictEqual(lone.mastery(std).histoire, { seen: 0, mastered: 0, total: 40 });
+// réussir plus tard la question ratée la rend maîtrisée
+const missedQ = lone.missedQuestions(std)[0];
+lone.recordSession('revision', 'Révision', [answer(E.present(missedQ, rng), false)], 3);
+m = lone.mastery(std).culture;
+assert.deepStrictEqual([m.seen, m.mastered], [4, 4]);
+
 // persistance
 const store2 = new E.Store(storage);
 assert.strictEqual(store2.data.history.length, 1);
