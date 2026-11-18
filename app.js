@@ -62,6 +62,17 @@
     return `<h1>${esc(title)}</h1><hr class="rule">`;
   }
 
+  // ------------------------------------------------------------------ « En savoir plus »
+  function moreHtml(m) {
+    if (!m || !(m.k || m.c)) return '';
+    let src = '';
+    if (m.s) src = m.s === 'Hors Livret' ? 'Non traité dans le Livret du citoyen.' : `Livret du citoyen (mai 2026), ${m.s}`;
+    return `<details class="more"><summary>En savoir plus</summary>
+      ${m.k ? `<p><strong>À retenir :</strong> ${esc(m.k)}</p>` : ''}
+      ${m.c ? `<p><strong>Pour comprendre :</strong> ${esc(m.c)}</p>` : ''}
+      ${src ? `<p class="src">${esc(src)}</p>` : ''}</details>`;
+  }
+
   // ------------------------------------------------------------------ une question posée
   function qaHtml(snap, number, onlyErrors) {
     const ok = E.snapshotOk(snap);
@@ -75,6 +86,7 @@
       body = `<div class="ans bad">Votre réponse : ${esc(given)}</div><div class="ans good">Bonne réponse : ${esc(good)}</div>`;
     }
     if (snap.e) body += `<div class="ans why">Justification : ${esc(snap.e)}</div>`;
+    body += moreHtml(snap.m);
     return `<article class="qa ${ok ? 'ok' : 'ko'}"><div class="qline"><span class="mark">${ok ? '✓' : '✗'}</span><span>${number}. ${esc(snap.q)}</span></div>${body}</article>`;
   }
 
@@ -148,7 +160,7 @@
       <div class="card">
         <p><strong>QCM Civique</strong> est une application d'entraînement au QCM de l'examen civique pour la naturalisation française. Ce n'est pas un service officiel.</p>
         <h3>Examen officiel</h3>
-        <p>Les énoncés viennent de la liste des questions de connaissance publiée par la Direction générale des étrangers en France (ministère de l'Intérieur) en janvier 2026. Cette liste ne donne pas les réponses : les choix et les explications ont été préparés avec l'aide d'une IA.</p>
+        <p>Les énoncés viennent de la liste des questions de connaissance publiée par la Direction générale des étrangers en France (ministère de l'Intérieur) en janvier 2026. Cette liste ne donne pas les réponses : les choix et les explications ont été préparés avec l'aide d'une IA, puis relus à l'aide du Livret du citoyen (édition de mai 2026). Dans « En savoir plus », les pages du Livret sont indiquées.</p>
         <h3>Complémentaire</h3>
         <p>Des questions supplémentaires pour approfondir chaque thème, également rédigées avec l'aide d'une IA.</p>
         <h3>Fiabilité</h3>
@@ -227,6 +239,7 @@
           <span class="letter">${'ABCD'[i]}</span><span>${esc(o)}</span></button>`).join('')}</div>
       </div>
       <div id="feedback" class="feedback" hidden></div>
+      <div id="more"></div>
       <div class="actions end">
         <button class="btn secondary" data-act="abandon">Abandonner</button>
         <button class="btn" id="next" data-act="next" disabled>Valider</button>
@@ -276,6 +289,7 @@
     fb.textContent = msg;
     fb.className = `feedback ${ok ? 'good' : 'bad'}`;
     fb.hidden = false;
+    document.getElementById('more').innerHTML = moreHtml(item.question.more);
     fb.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   }
 

@@ -13,6 +13,7 @@ Application d'entraînement au QCM de l'examen civique pour la naturalisation fr
 
 - Séries de 10, 20 ou 30 questions par catégorie, ou tirées dans toutes les catégories.
 - Simulation de 40 questions, tirage équilibré entre catégories, seuil de réussite de 80 % (32/40).
+- « En savoir plus » sous chaque question : l'essentiel à retenir, le contexte et, pour le mode examen, la page du Livret du citoyen (édition de mai 2026).
 - Suivi de la maîtrise par catégorie : une question est maîtrisée quand la dernière réponse était juste.
 - Résultat détaillé : toutes les questions posées, votre réponse, la bonne réponse et la justification.
 - Reprise des erreurs d'une série en tentatives successives, avec le détail de chaque tentative dans l'historique.

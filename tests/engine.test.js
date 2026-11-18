@@ -20,6 +20,20 @@ for (const bank of [std, off]) {
   assert.strictEqual(new Set(ids).size, ids.length, 'identifiants uniques');
 }
 
+// « En savoir plus » : toutes les questions officielles ont un complément et une source
+assert.ok(E.allQuestions(off).every((q) => q.more && q.more.k && q.more.c && q.more.s), 'compléments officiels');
+// ...et le complément suit la question dans l'historique (instantané) puis en reprise
+{
+  const q = off.histoire.questions[0];
+  const it = E.present(q, E.makeRng(5));
+  it.chosen = it.correctIndex;
+  const snap = E.snapshotItem(it);
+  assert.deepStrictEqual(snap.m, q.more);
+  assert.deepStrictEqual(E.questionFromSnapshot(snap).more, q.more);
+  const plain = E.snapshotItem(E.present(std.culture.questions.find((x) => !x.more) || std.culture.questions[0], E.makeRng(6)));
+  assert.ok(!('m' in plain) || plain.m, 'sans complément : pas de champ vide');
+}
+
 // simulation : 40 questions uniques, équilibrées
 for (const bank of [std, off]) {
   const sim = E.buildSimulation(bank, E.makeRng(1));

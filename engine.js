@@ -45,7 +45,8 @@ const Engine = (() => {
           throw new Error(`${key} : il faut 4 réponses distinctes (${r.q})`);
         }
         return { id: r.id, category: key, text: r.q, answer: r.a, wrong: r.w.slice(),
-                 explanation: r.e || '', theme: r.theme || '' };
+                 explanation: r.e || '', theme: r.theme || '',
+                 more: (r.k || r.c) ? { k: r.k || '', c: r.c || '', s: r.s || '' } : null };
       });
       bank[key] = { key, label: cat.label, questions };
     });
@@ -104,8 +105,10 @@ const Engine = (() => {
   // la banque de questions change plus tard.
   function snapshotItem(it) {
     const q = it.question;
-    return { id: q.id, category: q.category, theme: q.theme, q: q.text, options: it.options.slice(),
-             correct: it.correctIndex, chosen: it.chosen, e: q.explanation };
+    const snap = { id: q.id, category: q.category, theme: q.theme, q: q.text, options: it.options.slice(),
+                   correct: it.correctIndex, chosen: it.chosen, e: q.explanation };
+    if (q.more) snap.m = q.more;
+    return snap;
   }
 
   const snapshotOk = (s) => s.chosen === s.correct;
@@ -113,7 +116,7 @@ const Engine = (() => {
   function questionFromSnapshot(s) {
     return { id: s.id, category: s.category, text: s.q, answer: s.options[s.correct],
              wrong: s.options.filter((_, i) => i !== s.correct), explanation: s.e || '',
-             theme: s.theme || '' };
+             theme: s.theme || '', more: s.m || null };
   }
 
   /** Dernier résultat de chaque question de la série, gardé s'il est faux. */

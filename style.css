@@ -66,6 +66,14 @@ h3 { margin: 20px 0 6px; font-size: 16px; color: var(--primary); }
 .cat .name { font-weight: 600; }
 .cat .btn { min-width: 46px; padding-left: 10px; padding-right: 10px; }
 
+/* En savoir plus */
+.more { margin: 8px 0; border: 1px solid var(--border); border-radius: 10px; padding: 6px 12px; background: var(--card); }
+.more summary { cursor: pointer; font-weight: 600; color: var(--primary); padding: 4px 0; }
+.more p { margin: 6px 0; font-size: 15px; }
+.more .src { color: var(--muted); font-size: 13px; }
+.qa .more { margin-left: calc(1.2em + 8px); }
+#more { margin-top: 4px; }
+
 /* maîtrise */
 .meter { position: relative; height: 6px; background: var(--btn2); border-radius: 3px; overflow: hidden; margin-top: 5px; }
 .meter > div { position: absolute; left: 0; top: 0; bottom: 0; }
