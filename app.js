@@ -162,7 +162,7 @@
         <h3>Examen officiel</h3>
         <p>Les énoncés viennent de la liste des questions de connaissance publiée par la Direction générale des étrangers en France (ministère de l'Intérieur) en janvier 2026. Cette liste ne donne pas les réponses : les choix et les explications ont été préparés avec l'aide d'une IA, puis relus à l'aide du Livret du citoyen (édition de mai 2026). Dans « En savoir plus », les pages du Livret sont indiquées.</p>
         <h3>Complémentaire</h3>
-        <p>Des questions supplémentaires pour approfondir chaque thème, également rédigées avec l'aide d'une IA.</p>
+        <p>Des questions supplémentaires pour approfondir chaque thème, également rédigées avec l'aide d'une IA. « En savoir plus » indique les pages du Livret du citoyen quand le sujet y figure.</p>
         <h3>Fiabilité</h3>
         <p>Une erreur reste possible. En cas de doute, la référence est le Livret du citoyen du ministère de l'Intérieur.</p>
         <h3>Vos données</h3>

@@ -22,6 +22,7 @@ for (const bank of [std, off]) {
 
 // « En savoir plus » : toutes les questions officielles ont un complément et une source
 assert.ok(E.allQuestions(off).every((q) => q.more && q.more.k && q.more.c && q.more.s), 'compléments officiels');
+assert.ok(E.allQuestions(std).every((q) => q.more && q.more.k && q.more.c && q.more.s), 'compléments complémentaires');
 // ...et le complément suit la question dans l'historique (instantané) puis en reprise
 {
   const q = off.histoire.questions[0];
