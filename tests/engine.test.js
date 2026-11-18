@@ -84,7 +84,7 @@ const broken = new E.Store({ getItem: () => null, setItem: () => { throw new Err
 broken.recordSession('categorie', 'x', items, 1);
 assert.strictEqual(broken.saveOk, false);
 
-// import : ancien format Python (sans attempts), fusion sans doublon
+// import : ancien format d'historique (sans attempts), fusion sans doublon
 const pyHistory = JSON.stringify({
   history: [{ date: '2026-11-17 17:01', mode: 'categorie', label: 'Culture (10 questions)', score: 8, total: 10, seconds: 112 }],
   missed: { 'culture-aaaa1111': 2 }, stats: { 'culture-aaaa1111': { ok: 2, ko: 1 } }, prefs: { official: true },
@@ -96,13 +96,4 @@ assert.strictEqual(store.data.stats['culture-aaaa1111'].ok, 2);
 assert.ok(!('attempts' in store.data.history[0]) || store.data.history[0].attempts);
 assert.throws(() => store.importMerge('{"x":1}'));
 
-// l'historique réel de l'appli Python s'importe tel quel
-const real = path.join(root, '..', 'App', 'resultats_avant_detail.json');
-if (fs.existsSync(real)) {
-  const s3 = new E.Store({ getItem: () => null, setItem: () => {} });
-  assert.strictEqual(s3.importMerge(fs.readFileSync(real, 'utf8')), 12);
-  const ids = Object.keys(s3.data.stats);
-  const known = new Set([...E.allQuestions(std), ...E.allQuestions(off)].map((q) => q.id));
-  assert.ok(ids.every((id) => known.has(id)), 'les identifiants Python correspondent à la banque web');
-}
 console.log('MOTEUR OK');

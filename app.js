@@ -38,6 +38,15 @@
     if (meta) meta.setAttribute('content', state.official ? '#0055a4' : '#1f4e9c');
   }
 
+  function setMode(official) {
+    if (state.official === official) return;
+    state.official = official;
+    store.data.prefs.official = official;
+    store.save();
+    applyTheme();
+    renderHome();
+  }
+
   function stopTimer() {
     if (state.timer) { clearInterval(state.timer); state.timer = null; }
   }
@@ -91,16 +100,17 @@
     const missed = store.missedQuestions(bank).length;
 
     const intro = off
-      ? `<div class="muted small">Seules les questions de la liste officielle du ministère de l'Intérieur (DGEF, publiée le 12/01/2026) sont posées.</div>
-         <p class="note">Les énoncés sont officiels. La liste ne donne pas les réponses : les choix proposés ici sont rédigés par Claude et peuvent comporter des erreurs. À confirmer avec le Livret du citoyen.</p>`
-      : '<p class="muted">Entraînez-vous par catégorie ou passez une simulation complète de 40 questions.</p>';
+      ? '<p class="muted">Les questions de la liste officielle publiée par le ministère de l\'Intérieur : le meilleur entraînement pour le jour de l\'examen.</p>'
+      : '<p class="muted">Des questions supplémentaires pour approfondir chaque thème et mieux comprendre les réponses.</p>';
 
     show('home', `
       ${persistent ? '' : '<div class="banner">Le stockage du navigateur est indisponible (navigation privée ?) : l\'historique ne sera pas conservé.</div>'}
-      ${header(off ? 'Examen civique : liste officielle' : 'QCM Civique')}
+      ${header('QCM Civique')}
+      <div class="tabs modes">
+        <button class="btn ${off ? '' : 'secondary'}" data-act="mode" data-mode="official">Examen officiel</button>
+        <button class="btn ${off ? 'secondary' : ''}" data-act="mode" data-mode="standard">Complémentaire</button>
+      </div>
       ${intro}
-      <label class="check strong"><input type="checkbox" data-change="official" ${off ? 'checked' : ''}>
-        <span>Mode examen officiel : uniquement les questions de la liste officielle (thème bleu-blanc-rouge)</span></label>
       <label class="check"><input type="checkbox" data-change="immediate" ${state.immediate ? 'checked' : ''}>
         <span>Afficher la correction après chaque question (entraînement par catégorie)</span></label>
       <div class="card">${cats}
@@ -112,21 +122,38 @@
         <button class="btn secondary" data-act="revise" ${missed ? '' : 'disabled'}>Réviser mes erreurs (${missed})</button>
         <button class="btn secondary" data-act="history">Historique</button>
       </div>
-      <h3>Sauvegarde de l'historique</h3>
-      <p class="muted small">L'historique reste sur cet appareil. Exportez-le pour le garder ou le transférer (l'application Python du PC lit et écrit le même format).</p>
+      <h3>Sauvegarde et transfert</h3>
+      <p class="muted small">Votre historique reste sur cet appareil. Exportez-le pour le conserver ou le transférer sur un autre appareil.</p>
       <div class="actions">
         <button class="btn secondary small" data-act="export">Exporter</button>
         <button class="btn secondary small" data-act="import">Importer et fusionner</button>
         <input type="file" id="import-file" accept=".json,application/json" hidden data-change="import">
       </div>
-      <footer>Application d'entraînement non officielle. Les questions « maison » et les réponses du mode officiel sont rédigées par Claude (IA) et peuvent contenir des erreurs : vérifiez avec le Livret du citoyen. Les énoncés du mode officiel proviennent de la liste publiée par la Direction générale des étrangers en France (ministère de l'Intérieur). Aucune donnée n'est envoyée : tout reste sur cet appareil.</footer>`);
+      <footer><button class="link" data-act="about">À propos</button></footer>`);
+  }
+
+  function renderAbout() {
+    show('about', `
+      ${header('À propos')}
+      <div class="card">
+        <p><strong>QCM Civique</strong> est une application d'entraînement au QCM de l'examen civique pour la naturalisation française. Ce n'est pas un service officiel.</p>
+        <h3>Examen officiel</h3>
+        <p>Les énoncés viennent de la liste des questions de connaissance publiée par la Direction générale des étrangers en France (ministère de l'Intérieur) en janvier 2026. Cette liste ne donne pas les réponses : les choix et les explications ont été préparés avec l'aide d'une IA.</p>
+        <h3>Complémentaire</h3>
+        <p>Des questions supplémentaires pour approfondir chaque thème, également rédigées avec l'aide d'une IA.</p>
+        <h3>Fiabilité</h3>
+        <p>Une erreur reste possible. En cas de doute, la référence est le Livret du citoyen du ministère de l'Intérieur.</p>
+        <h3>Vos données</h3>
+        <p>Aucune donnée n'est envoyée. Votre historique reste sur cet appareil.</p>
+      </div>
+      <div class="actions"><button class="btn secondary" data-act="home">Retour</button></div>`);
   }
 
   // ------------------------------------------------------------------ démarrage des séances
   function begin(mode, label, questions, practice, replay) {
     if (!questions.length) { alert('Aucune question disponible pour ce choix.'); return; }
     state.session = {
-      mode, label: (state.official ? '[Officiel] ' : '') + label,
+      mode, label: (state.official ? '[Examen] ' : '[Compl.] ') + label,
       items: questions.map((q) => E.present(q, rng)), practice, replay,
       seriesId: null, attemptNo: 1, seconds: 0, index: 0, validated: false, choice: -1, start: Date.now(),
     };
@@ -177,7 +204,7 @@
     s.validated = false;
     s.choice = -1;
     let where = currentBank()[item.question.category].label;
-    if (item.question.theme) where += ` · Thème officiel : ${item.question.theme}`;
+    if (item.question.theme) where += ` · Thème de l'examen : ${item.question.theme}`;
     const pct = (100 * s.index) / s.items.length;
 
     show('question', `
@@ -339,7 +366,7 @@
 
     show('history', `
       ${header('Historique')}
-      <div class="card"><h3 style="margin-top:0">Réussite par catégorie (${state.official ? 'liste officielle' : 'questions maison'})</h3>${rows}${simLine}</div>
+      <div class="card"><h3 style="margin-top:0">Réussite par catégorie (${state.official ? 'examen officiel' : 'complémentaire'})</h3>${rows}${simLine}</div>
       <h3>Séances (touchez-en une pour le détail)</h3>
       ${list || '<p class="muted">Aucune séance pour l\'instant.</p>'}
       <div class="actions"><button class="btn secondary" data-act="home">Accueil</button></div>`);
@@ -411,6 +438,8 @@
     revise: startRevision,
     history: renderHistory,
     home: renderHome,
+    about: renderAbout,
+    mode: (d) => setMode(d.mode === 'official'),
     choose: (d) => choose(Number(d.i)),
     next,
     abandon,
@@ -434,13 +463,7 @@
   document.addEventListener('change', (e) => {
     const el = e.target.closest('[data-change]');
     if (!el) return;
-    if (el.dataset.change === 'official') {
-      state.official = el.checked;
-      store.data.prefs.official = el.checked;
-      store.save();
-      applyTheme();
-      renderHome();
-    } else if (el.dataset.change === 'immediate') {
+    if (el.dataset.change === 'immediate') {
       state.immediate = el.checked;
     } else if (el.dataset.change === 'import') {
       importHistory(el);
@@ -468,7 +491,7 @@
       $app.innerHTML = '<div class="banner">Impossible de charger les questions. Vérifiez la connexion, puis rechargez la page.</div>';
       return;
     }
-    state.official = Boolean(store.data.prefs.official);
+    state.official = store.data.prefs.official !== false;   // le mode examen est le mode par défaut
     applyTheme();
     renderHome();
   }

@@ -1,6 +1,4 @@
-/* Moteur du QCM : tirage, correction, historique. Aucun accès au DOM (testable avec Node).
- * Reprend la logique de quiz_engine.py. Le format d'historique est identique à celui de
- * l'application Python (resultats.json) : on peut exporter d'un côté et importer de l'autre. */
+/* Moteur du QCM : tirage, correction, historique. Aucun accès au DOM (testable avec Node). */
 const Engine = (() => {
   const SIM_SIZE = 40;
   const PASS_RATIO = 0.8;
@@ -231,7 +229,7 @@ const Engine = (() => {
       return JSON.stringify(this.data, null, 1);
     }
 
-    /** Fusionne un historique exporté (de l'appli web ou de l'appli Python) avec l'existant.
+    /** Fusionne un historique exporté avec l'existant.
      *  Sans doublon : on peut réimporter le même fichier sans fausser les chiffres. */
     importMerge(text) {
       const other = JSON.parse(text);
