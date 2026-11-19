@@ -1,6 +1,6 @@
 name: Tests
 
-# Exécute les tests à chaque publication : moteur, banque de questions et contrôles de sécurité.
+# Exécute les tests à chaque publication : moteur, banque de questions, sécurité et accessibilité.
 on:
   push:
     branches: [main]
@@ -30,3 +30,5 @@ jobs:
         run: node tests/engine.test.js
       - name: Sécurité
         run: node tests/security.test.js
+      - name: Accessibilité
+        run: node tests/a11y.test.js

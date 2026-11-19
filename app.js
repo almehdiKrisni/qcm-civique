@@ -52,17 +52,24 @@
   // ------------------------------------------------------------------ boîtes de dialogue
   // Intégrées à la page : les boîtes natives (confirm, alert) peuvent être bloquées par le
   // navigateur ou l'application installée, et la question reste alors sans réponse.
+  let returnFocus = null;
+
   function closeDialog() {
     const d = document.getElementById('dialog');
-    if (d) d.remove();
+    if (!d) return;
+    d.remove();
+    $app.removeAttribute('inert');   // le fond redevient utilisable
+    if (returnFocus && document.contains(returnFocus)) returnFocus.focus();
+    returnFocus = null;
   }
 
   function dialog(message, buttons) {
     closeDialog();
+    returnFocus = document.activeElement;
     const el = document.createElement('div');
     el.className = 'modal';
     el.id = 'dialog';
-    el.innerHTML = `<div class="modal-box" role="dialog" aria-modal="true"><p>${esc(message)}</p>
+    el.innerHTML = `<div class="modal-box" role="alertdialog" aria-modal="true" aria-describedby="dialog-msg"><p id="dialog-msg">${esc(message)}</p>
       <div class="actions end">${buttons.map((b, i) => `<button class="btn ${b.primary ? '' : 'secondary'}" data-dlg="${i}">${esc(b.label)}</button>`).join('')}</div></div>`;
     el.addEventListener('click', (e) => {
       const b = e.target.closest('[data-dlg]');
@@ -71,7 +78,19 @@
       closeDialog();
       if (cfg.onClick) cfg.onClick();
     });
+    // le focus reste dans la boîte tant qu'elle est ouverte (Tab fait le tour de ses boutons)
+    el.addEventListener('keydown', (e) => {
+      if (e.key !== 'Tab') return;
+      const btns = [...el.querySelectorAll('button')];
+      const first = btns[0];
+      const last = btns[btns.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    });
+    $app.setAttribute('inert', '');
     document.body.appendChild(el);
+    const primary = el.querySelector('button.btn:not(.secondary)') || el.querySelector('button');
+    if (primary) primary.focus();
   }
 
   const notify = (message) => dialog(message, [{ label: 'OK', primary: true }]);
@@ -83,12 +102,21 @@
     state.tick = null;
   }
 
+  const TITLES = {
+    home: 'Accueil', about: 'À propos', settings: 'Réglages', sheets: 'Fiches de révision', flags: 'Questions à revoir',
+    question: 'Question', results: 'Résultat', history: 'Historique', detail: 'Détail de la séance',
+  };
+
   function show(view, html) {
     stopTimer();
     state.view = view;
     $app.innerHTML = html;
     $app.querySelectorAll('[data-w]').forEach((el) => { el.style.width = `${el.dataset.w}%`; });
+    document.title = `${TITLES[view] || 'QCM'} · QCM Civique`;
     window.scrollTo(0, 0);
+    // après un changement d'écran, le focus va sur le titre : un lecteur d'écran l'annonce, le clavier repart d'en haut
+    const heading = $app.querySelector(view === 'question' ? 'h2' : 'h1');
+    if (heading && !document.getElementById('dialog')) { heading.setAttribute('tabindex', '-1'); heading.focus({ preventScroll: true }); }
   }
 
   function header(title) {
@@ -112,7 +140,7 @@
 
   const flagLabel = (on) => (on ? '★ Marquée' : '☆ À revoir');
   const flagButton = (id, cls = 'link flagbtn') =>
-    `<button class="${cls}" data-act="flag" data-id="${esc(id)}" aria-label="Marquer cette question à revoir">${flagLabel(store.isFlagged(id))}</button>`;
+    `<button class="${cls}" data-act="flag" data-id="${esc(id)}" aria-pressed="${store.isFlagged(id)}" aria-label="Marquer cette question à revoir">${flagLabel(store.isFlagged(id))}</button>`;
 
   // ------------------------------------------------------------------ une question posée
   function qaHtml(snap, number, onlyErrors) {
@@ -143,7 +171,7 @@
     ? `Maîtrise ${masteryPct(m)} % · ${m.seen} vue${m.seen > 1 ? 's' : ''} sur ${m.total}`
     : `Pas encore travaillée · ${m.total} questions`);
   // les largeurs sont appliquées par le script (data-w) : la politique de sécurité interdit les styles en ligne
-  const meterHtml = (m) => `<div class="meter"><div class="seen" data-w="${(100 * m.seen) / m.total}"></div>
+  const meterHtml = (m) => `<div class="meter" aria-hidden="true"><div class="seen" data-w="${(100 * m.seen) / m.total}"></div>
     <div class="done" data-w="${(100 * m.mastered) / m.total}"></div></div>`;
 
   // ------------------------------------------------------------------ rappels de l'accueil
@@ -216,11 +244,11 @@
       ${header('À propos')}
       <div class="card">
         <p><strong>QCM Civique</strong> est une application d'entraînement au QCM de l'examen civique pour la naturalisation française. Ce n'est pas un service officiel.</p>
-        <h3>Les questions</h3>
+        <h2 class="sub">Les questions</h2>
         <p>Les énoncés viennent de la liste des questions de connaissance publiée par la Direction générale des étrangers en France (ministère de l'Intérieur) en janvier 2026. Cette liste ne donne pas les réponses : les choix et les explications ont été préparés avec l'aide d'une IA, puis relus à l'aide du Livret du citoyen (édition de mai 2026). Dans « En savoir plus », les pages du Livret sont indiquées.</p>
-        <h3>Fiabilité</h3>
+        <h2 class="sub">Fiabilité</h2>
         <p>Une erreur reste possible. En cas de doute, la référence est le Livret du citoyen du ministère de l'Intérieur.</p>
-        <h3>Vos données</h3>
+        <h2 class="sub">Vos données</h2>
         <p>Aucune donnée n'est envoyée. Votre historique reste sur cet appareil.</p>
       </div>
       <div class="actions"><button class="btn secondary" data-act="home">Retour</button></div>`);
@@ -231,22 +259,22 @@
     const theme = prefs().theme || 'auto';
     const size = prefs().textSize || 'normal';
     const opt = (act, key, value, label, current) =>
-      `<button class="btn ${current === value ? '' : 'secondary'}" data-act="${act}" data-${key}="${value}">${label}</button>`;
+      `<button class="btn ${current === value ? '' : 'secondary'}" data-act="${act}" data-${key}="${value}" aria-pressed="${current === value}">${label}</button>`;
     show('settings', `
       ${header('Réglages')}
-      <div class="card"><h3 class="first">Apparence</h3>
+      <div class="card"><h2 class="sub first">Apparence</h2>
         <div class="tabs">${opt('set-theme', 'value', 'auto', 'Automatique', theme)}${opt('set-theme', 'value', 'light', 'Clair', theme)}${opt('set-theme', 'value', 'dark', 'Sombre', theme)}</div>
-        <h3>Taille du texte</h3>
+        <h2 class="sub">Taille du texte</h2>
         <div class="tabs">${opt('set-size', 'value', 'normal', 'Normale', size)}${opt('set-size', 'value', 'large', 'Grande', size)}</div>
       </div>
-      <div class="card"><h3 class="first">Sauvegarde et transfert</h3>
+      <div class="card"><h2 class="sub first">Sauvegarde et transfert</h2>
         <p class="muted small">Votre historique et vos questions marquées restent sur cet appareil. Exportez-les pour les conserver ou les transférer sur un autre appareil.${prefs().lastExport ? ` Dernière sauvegarde : ${esc(E.nowString(new Date(prefs().lastExport)))}.` : ''}</p>
         <div class="actions">
           <button class="btn secondary small" data-act="export">Exporter</button>
           <button class="btn secondary small" data-act="import">Importer et fusionner</button>
           <input type="file" id="import-file" accept=".json,application/json" hidden data-change="import">
         </div>
-        <h3>Effacer mes données</h3>
+        <h2 class="sub">Effacer mes données</h2>
         <p class="muted small">Supprime l'historique, les statistiques, les erreurs et les questions marquées de cet appareil. Pensez à exporter avant.</p>
         <div class="actions"><button class="btn secondary small" data-act="reset">Effacer mes données</button></div>
       </div>
@@ -393,16 +421,19 @@
     const pct = (100 * s.index) / s.items.length;
 
     show('question', `
+      <h1 class="visually-hidden">${esc(s.label)}</h1>
       <div class="topline"><span class="session-label">${esc(s.label)}</span><span id="timer" class="muted small"></span></div>
       <div class="muted small">Question ${s.index + 1} / ${s.items.length} · ${esc(where)}</div>
-      <div class="bar"><div data-w="${pct}"></div></div>
+      <div class="bar" role="progressbar" aria-label="Progression de la séance" aria-valuemin="0" aria-valuemax="${s.items.length}" aria-valuenow="${s.index}" aria-valuetext="${s.index} question${s.index > 1 ? 's' : ''} traitée${s.index > 1 ? 's' : ''} sur ${s.items.length}"><div data-w="${pct}"></div></div>
       ${isExam(s) ? '<div class="exam-note">Examen de 45 minutes. Une question passée sans réponse est comptée comme fausse.</div>' : ''}
       <div class="card question">
-        <h2>${esc(item.question.text)}</h2>
-        <div id="opts">${item.options.map((o, i) => `<button class="opt" data-act="choose" data-i="${i}">
-          <span class="letter">${'ABCD'[i]}</span><span>${esc(o)}</span></button>`).join('')}</div>
+        <h2 id="qtext">${esc(item.question.text)}</h2>
+        <div id="opts" role="radiogroup" aria-labelledby="qtext">${item.options.map((o, i) => `<label class="opt">
+          <input type="radio" name="opt" value="${i}" data-change="choose" class="visually-hidden">
+          <span class="letter" aria-hidden="true">${'ABCD'[i]}</span><span class="otext">${esc(o)}</span></label>`).join('')}</div>
       </div>
-      <div id="feedback" class="feedback" hidden></div>
+      <div id="timer-live" class="visually-hidden" role="status" aria-live="polite"></div>
+      <div id="feedback" class="feedback" role="status" hidden></div>
       <div id="more"></div>
       <div class="qactions">
         <button class="btn" id="next" data-act="next" disabled>Valider</button>
@@ -419,6 +450,12 @@
         if (left <= 0) { timeUp(); return; }
         el.textContent = `Temps restant : ${fmtTime(left)}`;
         el.classList.toggle('alert', left <= 300);
+        // annonce vocale aux seuils seulement (pas à chaque seconde)
+        const live = document.getElementById('timer-live');
+        cur.said = cur.said || {};
+        [[300, '5 minutes'], [60, '1 minute'], [10, '10 secondes']].forEach(([t, label]) => {
+          if (left <= t && !cur.said[t] && live) { cur.said[t] = true; live.textContent = `Il reste ${label}.`; }
+        });
       } else {
         el.textContent = `Temps : ${fmtTime(elapsed)}`;
       }
@@ -461,26 +498,36 @@
     const s = state.session;
     if (!s || s.validated) return;
     s.choice = i;
-    document.querySelectorAll('#opts .opt').forEach((b, j) => b.classList.toggle('selected', j === i));
+    const radios = document.querySelectorAll('#opts input[type="radio"]');
+    if (radios[i]) radios[i].checked = true;   // cas du raccourci clavier (1 à 4, A à D)
     updateNext();
   }
 
   function showFeedback(item) {
+    // la couleur ne porte pas seule l'information : un repère écrit (✓ / ✗) et un texte pour lecteur d'écran sont ajoutés
     document.querySelectorAll('#opts .opt').forEach((b, i) => {
+      const input = b.querySelector('input');
+      input.disabled = true;
       b.classList.add('locked');
-      b.classList.remove('selected');
-      if (i === item.correctIndex) b.classList.add('correct');
-      else if (i === item.chosen) b.classList.add('wrong');
+      const good = i === item.correctIndex;
+      const bad = !good && i === item.chosen;
+      if (good) b.classList.add('correct');
+      else if (bad) b.classList.add('wrong');
+      if (good || bad) {
+        b.insertAdjacentHTML('beforeend', `<span class="mk" aria-hidden="true">${good ? '✓' : '✗'}</span>
+          <span class="visually-hidden">${good ? '(bonne réponse)' : '(votre réponse, fausse)'}</span>`);
+      }
     });
     const ok = E.isCorrect(item);
     let msg = ok ? 'Bonne réponse !' : `Mauvaise réponse. Bonne réponse : ${item.options[item.correctIndex]}`;
     if (item.question.explanation) msg += `\n${item.question.explanation}`;
     const fb = document.getElementById('feedback');
-    fb.textContent = msg;
     fb.className = `feedback ${ok ? 'good' : 'bad'}`;
     fb.hidden = false;
+    setTimeout(() => { fb.textContent = msg; }, 50);   // le texte arrive après l'affichage : la zone est alors annoncée
     document.getElementById('more').innerHTML = moreHtml(item.question.more);
-    fb.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    const calm = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    fb.scrollIntoView({ block: 'nearest', behavior: calm ? 'auto' : 'smooth' });
   }
 
   function next() {
@@ -573,10 +620,10 @@
         <button class="btn secondary" data-act="home">Accueil</button>
         <button class="btn secondary" data-act="history">Historique</button>
       </div>
-      <h3>Par catégorie</h3>${cats}
+      <h2 class="sub">Par catégorie</h2>${cats}
       <div class="tabs">
-        <button class="btn ${flt === 'all' ? '' : 'secondary'}" data-act="tab-results" data-flt="all">Toutes (${snaps.length})</button>
-        <button class="btn ${flt === 'errors' ? '' : 'secondary'}" data-act="tab-results" data-flt="errors">Erreurs (${nErr})</button>
+        <button class="btn ${flt === 'all' ? '' : 'secondary'}" data-act="tab-results" data-flt="all" aria-pressed="${flt === 'all'}">Toutes (${snaps.length})</button>
+        <button class="btn ${flt === 'errors' ? '' : 'secondary'}" data-act="tab-results" data-flt="errors" aria-pressed="${flt === 'errors'}">Erreurs (${nErr})</button>
       </div>
       <div class="card">${qaList(snaps, flt === 'errors')}</div>`);
   }
@@ -607,9 +654,9 @@
 
     show('history', `
       ${header('Historique')}
-      <div class="card"><h3 class="first">Maîtrise par catégorie</h3>
+      <div class="card"><h2 class="sub first">Maîtrise par catégorie</h2>
         <p class="muted small">Une question est maîtrisée quand votre dernière réponse était juste. Corriger une erreur la fait remonter.</p>${rows}${simLine}</div>
-      <h3>Séances (touchez-en une pour le détail)</h3>
+      <h2 class="sub">Séances (touchez-en une pour le détail)</h2>
       ${list || '<p class="muted">Aucune séance pour l\'instant.</p>'}
       <div class="actions"><button class="btn secondary" data-act="home">Accueil</button></div>`);
   }
@@ -626,14 +673,14 @@
       const retries = att.length - 1;
       const kind = (a) => (a.n === 1 ? 'série complète' : 'reprise des erreurs');
       const summary = att.map((a) => `<div class="list-line">Tentative ${a.n} (${kind(a)}) : ${a.score}/${a.total} · ${fmtTime(a.seconds)} · ${esc(a.date)}</div>`).join('');
-      const blocks = att.map((a) => `<h3>Tentative ${a.n} - ${kind(a)} - ${a.score}/${a.total}</h3><div class="card">${qaList(a.items, flt === 'errors')}</div>`).join('');
+      const blocks = att.map((a) => `<h2 class="sub">Tentative ${a.n} - ${kind(a)} - ${a.score}/${a.total}</h2><div class="card">${qaList(a.items, flt === 'errors')}</div>`).join('');
       if (remaining.length) retryBtn = `<button class="btn grow" data-act="retry-series" data-id="${esc(h.id)}">Refaire mes erreurs (${remaining.length})</button>`;
-      body = `<div class="card"><h3 class="first">Résumé</h3>
+      body = `<div class="card"><h2 class="sub first">Résumé</h2>
           <div class="list-line">Tentatives : ${att.length} (${retries ? `${plural(retries, 'reprise')} des erreurs` : 'aucune reprise'})</div>${summary}
           <div class="list-line ${remaining.length ? 'tag-ko' : 'tag-ok'}">Erreurs restant à corriger : ${remaining.length}</div></div>
         <div class="tabs">
-          <button class="btn ${flt === 'all' ? '' : 'secondary'}" data-act="tab-detail" data-idx="${idx}" data-flt="all">Toutes les questions</button>
-          <button class="btn ${flt === 'errors' ? '' : 'secondary'}" data-act="tab-detail" data-idx="${idx}" data-flt="errors">Erreurs seulement</button>
+          <button class="btn ${flt === 'all' ? '' : 'secondary'}" data-act="tab-detail" data-idx="${idx}" data-flt="all" aria-pressed="${flt === 'all'}">Toutes les questions</button>
+          <button class="btn ${flt === 'errors' ? '' : 'secondary'}" data-act="tab-detail" data-idx="${idx}" data-flt="errors" aria-pressed="${flt === 'errors'}">Erreurs seulement</button>
         </div>${blocks}`;
     }
     show('detail', `
@@ -682,7 +729,7 @@
   // ------------------------------------------------------------------ évènements
   function toggleFlag(id) {
     const on = store.toggleFlag(id);
-    document.querySelectorAll(`[data-act="flag"][data-id="${id}"]`).forEach((b) => { b.textContent = flagLabel(on); });
+    document.querySelectorAll(`[data-act="flag"][data-id="${id}"]`).forEach((b) => { b.textContent = flagLabel(on); b.setAttribute('aria-pressed', String(on)); });
   }
 
   const actions = {
@@ -732,6 +779,8 @@
       state.immediate = el.checked;
     } else if (el.dataset.change === 'import') {
       importHistory(el);
+    } else if (el.dataset.change === 'choose') {
+      choose(Number(el.value));
     }
   });
 
@@ -742,7 +791,9 @@
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') closeDialog();
     if (document.getElementById('dialog')) return;   // une boîte de dialogue est ouverte
-    if (state.view !== 'question' || !state.session || e.target !== document.body) return;
+    const onRadio = e.target.matches && e.target.matches('#opts input[type="radio"]');
+    if (state.view !== 'question' || !state.session || (e.target !== document.body && !onRadio)) return;
+    if (onRadio && !/^[1-4]$|^Enter$/.test(e.key)) return;   // les flèches gardent leur rôle natif sur un groupe de boutons radio
     if (e.key === 'Enter') {
       const btn = document.getElementById('next');
       if (btn && !btn.disabled) next();
@@ -762,6 +813,7 @@
     if (!pill) {
       pill = document.createElement('div');
       pill.id = 'net';
+      pill.setAttribute('role', 'status');
       pill.textContent = 'Hors ligne : tout fonctionne normalement';
       document.body.appendChild(pill);
     }
