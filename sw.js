@@ -1,7 +1,7 @@
 /* Service worker : fait fonctionner l'application hors ligne.
  * Cache d'abord, puis mise à jour en arrière-plan : une nouvelle version publiée est prise
  * en compte au 2e lancement. Changer CACHE force le renouvellement complet. */
-const CACHE = 'qcm-civique-v9';
+const CACHE = 'qcm-civique-v12';
 const ASSETS = [
   './', 'index.html', 'style.css', 'engine.js', 'app.js', 'data/banks.json',
   'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png',

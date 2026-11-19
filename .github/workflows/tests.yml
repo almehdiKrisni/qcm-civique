@@ -1,0 +1,32 @@
+name: Tests
+
+# Exécute les tests à chaque publication : moteur, banque de questions et contrôles de sécurité.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# droits minimaux : lecture seule du code
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      # actions épinglées sur un commit précis (et non sur une étiquette modifiable)
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      - name: Syntaxe
+        run: |
+          node --check app.js
+          node --check engine.js
+          node --check sw.js
+      - name: Moteur et banque de questions
+        run: node tests/engine.test.js
+      - name: Sécurité
+        run: node tests/security.test.js

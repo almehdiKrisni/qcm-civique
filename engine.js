@@ -3,6 +3,7 @@ const Engine = (() => {
   const SIM_SIZE = 40;
   const PASS_RATIO = 0.8;
   const BATCH_SIZES = [10, 20, 30];
+  const EXAM_SECONDS = 45 * 60;   // durée officielle de l'examen
 
   // ------------------------------------------------------------------ hasard
   function mulberry32(seed) {
@@ -18,7 +19,7 @@ const Engine = (() => {
 
   function makeRng(seed) {
     const f = seed == null ? Math.random : mulberry32(seed);
-    return { int: (n) => Math.floor(f() * n) };
+    return { int: (n) => Math.floor(f() * n), float: f };
   }
 
   function shuffle(arr, rng) {
@@ -138,7 +139,7 @@ const Engine = (() => {
     constructor(storage, key = 'qcm-civique-v1') {
       this.storage = storage;
       this.key = key;
-      this.data = { history: [], missed: {}, stats: {}, prefs: {} };
+      this.data = { history: [], missed: {}, stats: {}, prefs: {}, flags: {} };
       this.saveOk = true;
       this.load();
     }
@@ -228,6 +229,53 @@ const Engine = (() => {
       return rates;
     }
 
+    // -- questions « à revoir » (marquées par l'utilisateur) et préférences --------------
+    isFlagged(id) { return Boolean(this.data.flags[id]); }
+
+    toggleFlag(id) {
+      if (this.data.flags[id]) delete this.data.flags[id];
+      else this.data.flags[id] = Date.now();
+      this.save();
+      return this.isFlagged(id);
+    }
+
+    flaggedQuestions(bank) {
+      const byId = new Map(allQuestions(bank).map((q) => [q.id, q]));
+      return Object.keys(this.data.flags).filter((id) => byId.has(id)).map((id) => byId.get(id));
+    }
+
+    setPref(key, value) {
+      this.data.prefs[key] = value;
+      this.save();
+    }
+
+    /** Efface l'historique, les statistiques, les erreurs et les questions marquées
+     *  (les réglages d'affichage sont conservés). */
+    reset() {
+      this.data.history = [];
+      this.data.missed = {};
+      this.data.stats = {};
+      this.data.flags = {};
+      this.save();
+    }
+
+    /** Tirage « intelligent » : favorise les erreurs actuelles, les questions jamais vues et
+     *  celles marquées à revoir ; les questions bien réussies reviennent moins souvent.
+     *  Tirage pondéré sans remise (Efraimidis-Spirakis). */
+    smartBatch(questions, n, rng) {
+      const scored = questions.map((q) => {
+        const st = this.data.stats[q.id];
+        let w;
+        if (q.id in this.data.missed) w = 6;
+        else if (!st || st.ok + st.ko === 0) w = 3;
+        else w = Math.max(0.15, 1 / (1 + st.ok));
+        if (this.data.flags[q.id]) w += 2;
+        return { q, key: Math.pow(Math.max(rng.float(), 1e-12), 1 / w) };
+      });
+      scored.sort((a, b) => b.key - a.key);
+      return scored.slice(0, Math.min(n, scored.length)).map((x) => x.q);
+    }
+
     /** Maîtrise par catégorie : questions vues, maîtrisées et total.
      *  Une question est « maîtrisée » quand sa dernière réponse était juste : elle sort des
      *  erreurs à revoir (`missed`) dès qu'elle est réussie, donc une erreur corrigée compte. */
@@ -272,13 +320,16 @@ const Engine = (() => {
         cur.ok = Math.max(cur.ok, st.ok || 0);
         cur.ko = Math.max(cur.ko, st.ko || 0);
       });
+      Object.entries(other.flags || {}).forEach(([id, t]) => {
+        if (!this.data.flags[id]) this.data.flags[id] = t;
+      });
       this.save();
       return added;
     }
   }
 
   return {
-    SIM_SIZE, PASS_RATIO, BATCH_SIZES, makeRng, loadBank, allQuestions, present, pickBatch,
+    SIM_SIZE, PASS_RATIO, BATCH_SIZES, EXAM_SECONDS, makeRng, loadBank, allQuestions, present, pickBatch,
     buildSimulation, isCorrect, summarize, passed, snapshotItem, snapshotOk, questionFromSnapshot,
     remainingErrors, nowString, Store,
   };

@@ -109,6 +109,41 @@ const broken = new E.Store({ getItem: () => null, setItem: () => { throw new Err
 broken.recordSession('categorie', 'x', items, 1);
 assert.strictEqual(broken.saveOk, false);
 
+// ------------------------------------------------------------------ questions à revoir
+assert.strictEqual(E.EXAM_SECONDS, 2700, 'l\'examen dure 45 minutes');
+const fl = new E.Store({ getItem: () => null, setItem: () => {} });
+const fid = all[10].id;
+assert.strictEqual(fl.isFlagged(fid), false);
+assert.strictEqual(fl.toggleFlag(fid), true);
+assert.deepStrictEqual(fl.flaggedQuestions(bank).map((q) => q.id), [fid]);
+assert.strictEqual(fl.toggleFlag(fid), false);
+assert.strictEqual(fl.flaggedQuestions(bank).length, 0);
+fl.setPref('theme', 'dark');
+assert.strictEqual(fl.data.prefs.theme, 'dark');
+
+// ------------------------------------------------------------------ série intelligente
+{
+  const sm = new E.Store({ getItem: () => null, setItem: () => {} });
+  const pool = bank.histoire.questions;            // 33 questions
+  const wrong = pool.slice(0, 5);                  // erreurs actuelles
+  const mastered = pool.slice(5, 15);              // déjà bien réussies
+  wrong.forEach((q) => { sm.data.stats[q.id] = { ok: 0, ko: 2 }; sm.data.missed[q.id] = 2; });
+  mastered.forEach((q) => { sm.data.stats[q.id] = { ok: 4, ko: 0 }; });
+  const flagged = pool[20];
+  sm.toggleFlag(flagged.id);
+  const counts = new Map();
+  const r = E.makeRng(21);
+  for (let i = 0; i < 400; i++) sm.smartBatch(pool, 10, r).forEach((q) => counts.set(q.id, (counts.get(q.id) || 0) + 1));
+  const avg = (qs) => qs.reduce((a, q) => a + (counts.get(q.id) || 0), 0) / qs.length;
+  const unseen = pool.slice(15).filter((q) => q.id !== flagged.id);
+  assert.ok(avg(wrong) > avg(unseen), 'les erreurs reviennent plus souvent que les questions jamais vues');
+  assert.ok(avg(unseen) > avg(mastered) * 2, 'les questions jamais vues reviennent bien plus que les questions maîtrisées');
+  assert.ok((counts.get(flagged.id) || 0) > avg(unseen), 'une question marquée à revoir est favorisée');
+  const one = sm.smartBatch(pool, 10, E.makeRng(5));
+  assert.strictEqual(new Set(one.map((q) => q.id)).size, 10, 'pas de doublon dans une série');
+  assert.strictEqual(sm.smartBatch(pool, 99, E.makeRng(5)).length, pool.length, 'plafonné au nombre de questions');
+}
+
 // ------------------------------------------------------------------ import / export
 const legacy = JSON.stringify({
   history: [{ date: '2026-11-17 17:01', mode: 'categorie', label: 'Culture (10 questions)', score: 8, total: 10, seconds: 112 }],
@@ -118,6 +153,10 @@ assert.strictEqual(store.importMerge(legacy), 1);
 assert.strictEqual(store.importMerge(legacy), 0, 'réimport : aucun doublon');
 assert.strictEqual(store.data.history.length, 2);
 assert.throws(() => store.importMerge('{"x":1}'));
+// les questions marquées à revoir se fusionnent aussi
+const withFlags = JSON.stringify({ history: [], flags: { 'off-culture-test': 1700000000000 } });
+store.importMerge(withFlags);
+assert.strictEqual(store.isFlagged('off-culture-test'), true);
 // les identifiants d'anciennes questions absentes de la banque ne cassent rien
 assert.ok(Array.isArray(store.missedQuestions(bank)));
 assert.doesNotThrow(() => store.mastery(bank));
