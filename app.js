@@ -241,6 +241,7 @@
       <div class="topline"><span class="session-label">${esc(s.label)}</span><span id="timer" class="muted small"></span></div>
       <div class="muted small">Question ${s.index + 1} / ${s.items.length} · ${esc(where)}</div>
       <div class="bar"><div style="width:${pct}%"></div></div>
+      ${isExam(s) ? '<div class="exam-note">Examen : une question passée sans réponse est comptée comme fausse.</div>' : ''}
       <div class="card question">
         <h2>${esc(item.question.text)}</h2>
         <div id="opts">${item.options.map((o, i) => `<button class="opt" data-act="choose" data-i="${i}">
@@ -272,8 +273,9 @@
       btn.disabled = !answered;
     } else {
       btn.textContent = last ? 'Voir le résultat' : 'Question suivante';
-      // Une réponse est obligatoire pour passer à la suite. Avec correction, elle a déjà été validée.
-      btn.disabled = s.practice ? false : !answered;
+      // Entraînement : une réponse est obligatoire (avec correction, elle a déjà été validée).
+      // Simulation d'examen : on peut passer sans répondre, un message d'attention s'affiche alors.
+      btn.disabled = s.practice || isExam(s) ? false : !answered;
     }
   }
 
@@ -306,16 +308,39 @@
   function next() {
     const s = state.session;
     const item = s.items[s.index];
-    if (s.choice < 0 && !(s.practice && s.validated)) return;   // pas de passage sans réponse
-    if (s.practice && !s.validated) {
-      item.chosen = s.choice;
-      s.validated = true;
-      showFeedback(item);
-      updateNext();
+    const answered = s.choice >= 0;
+    if (s.practice) {
+      if (!s.validated) {
+        if (!answered) return;
+        item.chosen = s.choice;
+        s.validated = true;
+        showFeedback(item);
+        updateNext();
+        return;
+      }
+      advance(item.chosen);
       return;
     }
-    if (!s.practice) item.chosen = s.choice;
+    if (answered) { advance(s.choice); return; }
+    if (isExam(s)) warnSkip();   // comme à l'examen : on peut passer, mais la question compte fausse
+  }
+
+  /** Enregistre le choix (null = sans réponse) et passe à la question suivante ou au résultat. */
+  function advance(choice) {
+    const s = state.session;
+    s.items[s.index].chosen = choice;
     if (s.index + 1 < s.items.length) { s.index += 1; renderQuestion(); } else { showResults(); }
+  }
+
+  /** Simulation d'examen : aucune correction pendant l'épreuve, une question sans réponse est fausse. */
+  const isExam = (s) => s.mode === 'simulation';
+
+  function warnSkip() {
+    const s = state.session;
+    const last = s.index === s.items.length - 1;
+    dialog('Attention : aucune réponse n\'est sélectionnée. Comme à l\'examen, une question passée sans réponse est comptée comme fausse.',
+      [{ label: 'Revenir à la question', primary: true },
+       { label: last ? 'Terminer sans répondre' : 'Passer sans répondre', onClick: () => advance(null) }]);
   }
 
   function abandon() {
@@ -349,6 +374,8 @@
 
     let info = `Temps : ${fmtTime(s.seconds)}`;
     if (s.mode === 'simulation') info += ` · Seuil de réussite : ${Math.floor(E.PASS_RATIO * res.total)} / ${res.total}`;
+    const blanks = s.items.filter((it) => it.chosen === null || it.chosen === undefined).length;
+    if (blanks) info += ` · ${plural(blanks, 'question')} sans réponse (comptée${blanks > 1 ? 's' : ''} fausse${blanks > 1 ? 's' : ''})`;
     const chain = attempts.length > 1
       ? `<div class="muted">Tentatives de cette série : ${attempts.map((a) => `${a.n}) ${a.score}/${a.total}`).join('  ')}</div>` : '';
     const cats = Object.keys(res.byCategory).sort().map((k) => `<div class="list-line">${esc(bank[k].label)} : ${res.byCategory[k][0]} / ${res.byCategory[k][1]}</div>`).join('');

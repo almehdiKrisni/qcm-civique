@@ -66,6 +66,9 @@ h3 { margin: 20px 0 6px; font-size: 16px; color: var(--primary); }
 .cat .name { font-weight: 600; }
 .cat .btn { min-width: 46px; padding-left: 10px; padding-right: 10px; }
 
+.exam-note { margin: 0 0 10px; padding: 6px 10px; border-left: 4px solid var(--accent); background: var(--card);
+  border-radius: 6px; font-size: 13px; color: var(--muted); }
+
 /* boîtes de dialogue */
 .modal { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center;
   padding: 20px; background: rgba(0, 0, 0, .45); }
