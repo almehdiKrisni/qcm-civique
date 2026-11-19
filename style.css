@@ -66,6 +66,14 @@ h3 { margin: 20px 0 6px; font-size: 16px; color: var(--primary); }
 .cat .name { font-weight: 600; }
 .cat .btn { min-width: 46px; padding-left: 10px; padding-right: 10px; }
 
+/* boîtes de dialogue */
+.modal { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center;
+  padding: 20px; background: rgba(0, 0, 0, .45); }
+.modal-box { width: 100%; max-width: 420px; background: var(--card); color: var(--text); border-radius: 14px;
+  padding: 18px; box-shadow: 0 10px 30px rgba(0, 0, 0, .3); }
+.modal-box p { margin: 0 0 12px; font-size: 17px; }
+.modal-box .actions { margin-bottom: 0; }
+
 /* En savoir plus */
 .more { margin: 8px 0; border: 1px solid var(--border); border-radius: 10px; padding: 6px 12px; background: var(--card); }
 .more summary { cursor: pointer; font-weight: 600; color: var(--primary); padding: 4px 0; }

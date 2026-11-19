@@ -37,6 +37,35 @@
     if (meta) meta.setAttribute('content', '#0055a4');
   }
 
+  // ------------------------------------------------------------------ boîtes de dialogue
+  // Intégrées à la page : les boîtes natives (confirm, alert) peuvent être bloquées par le
+  // navigateur ou l'application installée, et la question reste alors sans réponse.
+  function closeDialog() {
+    const d = document.getElementById('dialog');
+    if (d) d.remove();
+  }
+
+  function dialog(message, buttons) {
+    closeDialog();
+    const el = document.createElement('div');
+    el.className = 'modal';
+    el.id = 'dialog';
+    el.innerHTML = `<div class="modal-box" role="dialog" aria-modal="true"><p>${esc(message)}</p>
+      <div class="actions end">${buttons.map((b, i) => `<button class="btn ${b.primary ? '' : 'secondary'}" data-dlg="${i}">${esc(b.label)}</button>`).join('')}</div></div>`;
+    el.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-dlg]');
+      if (!b) return;
+      const cfg = buttons[Number(b.dataset.dlg)];
+      closeDialog();
+      if (cfg.onClick) cfg.onClick();
+    });
+    document.body.appendChild(el);
+  }
+
+  const notify = (message) => dialog(message, [{ label: 'OK', primary: true }]);
+  const askConfirm = (message, yesLabel, onYes) =>
+    dialog(message, [{ label: 'Continuer la séance' }, { label: yesLabel, primary: true, onClick: onYes }]);
+
   function stopTimer() {
     if (state.timer) { clearInterval(state.timer); state.timer = null; }
   }
@@ -152,7 +181,7 @@
 
   // ------------------------------------------------------------------ démarrage des séances
   function begin(mode, label, questions, practice, replay) {
-    if (!questions.length) { alert('Aucune question disponible pour ce choix.'); return; }
+    if (!questions.length) { notify('Aucune question disponible pour ce choix.'); return; }
     state.session = {
       mode, label,
       items: questions.map((q) => E.present(q, rng)), practice, replay,
@@ -187,7 +216,7 @@
   function startRetry(seriesId, replay) {
     const entry = store.findSeries(seriesId);
     const errors = E.remainingErrors(entry.attempts);
-    if (!errors.length) { alert('Toutes les erreurs de cette série sont corrigées.'); return; }
+    if (!errors.length) { notify('Toutes les erreurs de cette série sont corrigées.'); return; }
     const qs = errors.map(E.questionFromSnapshot);
     for (let i = qs.length - 1; i > 0; i--) { const j = rng.int(i + 1); [qs[i], qs[j]] = [qs[j], qs[i]]; }
     state.session = {
@@ -237,12 +266,14 @@
     const btn = document.getElementById('next');
     if (!btn) return;
     const last = s.index === s.items.length - 1;
+    const answered = s.choice >= 0;
     if (s.practice && !s.validated) {
       btn.textContent = 'Valider';
-      btn.disabled = s.choice < 0;
+      btn.disabled = !answered;
     } else {
       btn.textContent = last ? 'Voir le résultat' : 'Question suivante';
-      btn.disabled = false;
+      // Une réponse est obligatoire pour passer à la suite. Avec correction, elle a déjà été validée.
+      btn.disabled = s.practice ? false : !answered;
     }
   }
 
@@ -275,6 +306,7 @@
   function next() {
     const s = state.session;
     const item = s.items[s.index];
+    if (s.choice < 0 && !(s.practice && s.validated)) return;   // pas de passage sans réponse
     if (s.practice && !s.validated) {
       item.chosen = s.choice;
       s.validated = true;
@@ -282,12 +314,12 @@
       updateNext();
       return;
     }
-    if (!s.practice) item.chosen = s.choice >= 0 ? s.choice : null;
+    if (!s.practice) item.chosen = s.choice;
     if (s.index + 1 < s.items.length) { s.index += 1; renderQuestion(); } else { showResults(); }
   }
 
   function abandon() {
-    if (confirm('Quitter cette séance ? Les réponses ne seront pas enregistrées.')) renderHome();
+    askConfirm('Quitter cette séance ? Les réponses ne seront pas enregistrées.', 'Quitter la séance', renderHome);
   }
 
   // ------------------------------------------------------------------ résultats d'une série
@@ -426,12 +458,12 @@
     if (!file) return;
     try {
       const added = store.importMerge(await file.text());
-      alert(added ? `${plural(added, 'séance ajoutée')}. Les erreurs à revoir et les statistiques ont été fusionnées.` : 'Aucune nouvelle séance : ce fichier est déjà intégré.');
+      renderHome();
+      notify(added ? `${plural(added, 'séance ajoutée')}. Les erreurs à revoir et les statistiques ont été fusionnées.` : 'Aucune nouvelle séance : ce fichier est déjà intégré.');
     } catch (e) {
-      alert('Import impossible : ce fichier n\'est pas un historique valide.');
+      notify('Import impossible : ce fichier n\'est pas un historique valide.');
     }
     input.value = '';
-    renderHome();
   }
 
   // ------------------------------------------------------------------ évènements
@@ -474,6 +506,8 @@
   });
 
   document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeDialog();
+    if (document.getElementById('dialog')) return;   // une boîte de dialogue est ouverte
     if (state.view !== 'question' || !state.session || e.target !== document.body) return;
     if (e.key === 'Enter') {
       const btn = document.getElementById('next');
