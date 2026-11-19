@@ -26,25 +26,15 @@
   const store = new E.Store(storage);
   const rng = E.makeRng();
   const state = {
-    banks: { standard: null, official: null },
-    official: false, immediate: true,
+    bank: null, immediate: true,
     session: null, view: 'home', timer: null,
   };
-  const currentBank = () => (state.official ? state.banks.official : state.banks.standard);
+  const currentBank = () => state.bank;
 
   function applyTheme() {
-    document.body.classList.toggle('official', state.official);
+    document.body.classList.add('official');   // thème bleu-blanc-rouge
     const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute('content', state.official ? '#0055a4' : '#1f4e9c');
-  }
-
-  function setMode(official) {
-    if (state.official === official) return;
-    state.official = official;
-    store.data.prefs.official = official;
-    store.save();
-    applyTheme();
-    renderHome();
+    if (meta) meta.setAttribute('content', '#0055a4');
   }
 
   function stopTimer() {
@@ -109,7 +99,6 @@
     const bank = currentBank();
     const mastery = store.mastery(bank);
     const totals = Object.values(mastery).reduce((a, m) => ({ seen: a.seen + m.seen, mastered: a.mastered + m.mastered, total: a.total + m.total }), { seen: 0, mastered: 0, total: 0 });
-    const off = state.official;
     const batchButtons = (attrs) => E.BATCH_SIZES.map((n) => `<button class="btn secondary" ${attrs} data-n="${n}">${n}</button>`).join('');
 
     const cats = Object.values(bank).map((c) => {
@@ -119,18 +108,10 @@
     }).join('');
     const missed = store.missedQuestions(bank).length;
 
-    const intro = off
-      ? '<p class="muted">Les questions de la liste officielle publiée par le ministère de l\'Intérieur : le meilleur entraînement pour le jour de l\'examen.</p>'
-      : '<p class="muted">Des questions supplémentaires pour approfondir chaque thème et mieux comprendre les réponses.</p>';
-
     show('home', `
       ${persistent ? '' : '<div class="banner">Le stockage du navigateur est indisponible (navigation privée ?) : l\'historique ne sera pas conservé.</div>'}
       ${header('QCM Civique')}
-      <div class="tabs modes">
-        <button class="btn ${off ? '' : 'secondary'}" data-act="mode" data-mode="official">Examen officiel</button>
-        <button class="btn ${off ? 'secondary' : ''}" data-act="mode" data-mode="standard">Complémentaire</button>
-      </div>
-      ${intro}
+      <p class="muted">Les questions de la liste officielle de l'examen civique publiée par le ministère de l'Intérieur : entraînez-vous par catégorie ou passez une simulation de 40 questions.</p>
       ${totals.seen ? `<div class="card progress"><div><strong>${totals.mastered}</strong> question${totals.mastered > 1 ? 's' : ''} maîtrisée${totals.mastered > 1 ? 's' : ''} sur ${totals.total}</div>
         ${meterHtml(totals)}<div class="muted small">${totals.seen} déjà vues · maîtrisée = dernière réponse juste</div></div>` : ''}
       <label class="check"><input type="checkbox" data-change="immediate" ${state.immediate ? 'checked' : ''}>
@@ -159,10 +140,8 @@
       ${header('À propos')}
       <div class="card">
         <p><strong>QCM Civique</strong> est une application d'entraînement au QCM de l'examen civique pour la naturalisation française. Ce n'est pas un service officiel.</p>
-        <h3>Examen officiel</h3>
+        <h3>Les questions</h3>
         <p>Les énoncés viennent de la liste des questions de connaissance publiée par la Direction générale des étrangers en France (ministère de l'Intérieur) en janvier 2026. Cette liste ne donne pas les réponses : les choix et les explications ont été préparés avec l'aide d'une IA, puis relus à l'aide du Livret du citoyen (édition de mai 2026). Dans « En savoir plus », les pages du Livret sont indiquées.</p>
-        <h3>Complémentaire</h3>
-        <p>Des questions supplémentaires pour approfondir chaque thème, également rédigées avec l'aide d'une IA. « En savoir plus » indique les pages du Livret du citoyen quand le sujet y figure.</p>
         <h3>Fiabilité</h3>
         <p>Une erreur reste possible. En cas de doute, la référence est le Livret du citoyen du ministère de l'Intérieur.</p>
         <h3>Vos données</h3>
@@ -175,7 +154,7 @@
   function begin(mode, label, questions, practice, replay) {
     if (!questions.length) { alert('Aucune question disponible pour ce choix.'); return; }
     state.session = {
-      mode, label: (state.official ? '[Examen] ' : '[Compl.] ') + label,
+      mode, label,
       items: questions.map((q) => E.present(q, rng)), practice, replay,
       seriesId: null, attemptNo: 1, seconds: 0, index: 0, validated: false, choice: -1, start: Date.now(),
     };
@@ -390,7 +369,7 @@
 
     show('history', `
       ${header('Historique')}
-      <div class="card"><h3 style="margin-top:0">Maîtrise par catégorie (${state.official ? 'examen officiel' : 'complémentaire'})</h3>
+      <div class="card"><h3 style="margin-top:0">Maîtrise par catégorie</h3>
         <p class="muted small">Une question est maîtrisée quand votre dernière réponse était juste. Corriger une erreur la fait remonter.</p>${rows}${simLine}</div>
       <h3>Séances (touchez-en une pour le détail)</h3>
       ${list || '<p class="muted">Aucune séance pour l\'instant.</p>'}
@@ -464,7 +443,6 @@
     history: renderHistory,
     home: renderHome,
     about: renderAbout,
-    mode: (d) => setMode(d.mode === 'official'),
     choose: (d) => choose(Number(d.i)),
     next,
     abandon,
@@ -510,13 +488,11 @@
   async function init() {
     try {
       const raw = await (await fetch('data/banks.json')).json();
-      state.banks.standard = E.loadBank(raw.standard);
-      state.banks.official = E.loadBank(raw.official);
+      state.bank = E.loadBank(raw.official);
     } catch (e) {
       $app.innerHTML = '<div class="banner">Impossible de charger les questions. Vérifiez la connexion, puis rechargez la page.</div>';
       return;
     }
-    state.official = store.data.prefs.official !== false;   // le mode examen est le mode par défaut
     applyTheme();
     renderHome();
   }

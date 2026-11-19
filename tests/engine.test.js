@@ -1,4 +1,4 @@
-// Tests du moteur : node tests/engine.test.js
+// Tests du moteur et de la banque de questions : node tests/engine.test.js
 const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
@@ -6,63 +6,61 @@ const E = require('../engine.js');
 
 const root = path.join(__dirname, '..');
 const raw = JSON.parse(fs.readFileSync(path.join(root, 'data', 'banks.json'), 'utf8'));
-const std = E.loadBank(raw.standard);
-const off = E.loadBank(raw.official);
+const bank = E.loadBank(raw.official);
+const all = E.allQuestions(bank);
 
-// banques : mêmes catégories dans le même ordre, tailles attendues
-assert.deepStrictEqual(Object.keys(std), Object.keys(off));
-assert.strictEqual(E.allQuestions(std).length, 279);
-assert.strictEqual(E.allQuestions(off).length, 243);
-assert.ok(E.allQuestions(off).every((q) => q.id.startsWith('off-') && q.theme));
-assert.ok(E.allQuestions(std).every((q) => !q.id.startsWith('off-')));
-for (const bank of [std, off]) {
-  const ids = E.allQuestions(bank).map((q) => q.id);
-  assert.strictEqual(new Set(ids).size, ids.length, 'identifiants uniques');
-}
+// ------------------------------------------------------------------ banque de questions
+assert.deepStrictEqual(Object.keys(bank), ['culture', 'droits_devoirs', 'geographie', 'histoire', 'institutions', 'mises_en_situation', 'valeurs_laicite']);
+assert.strictEqual(all.length, 258);
+assert.strictEqual(new Set(all.map((q) => q.id)).size, all.length, 'identifiants uniques');
+assert.strictEqual(new Set(all.map((q) => q.text)).size, all.length, 'énoncés uniques');
+assert.ok(all.every((q) => q.id.startsWith('off-') && q.theme), 'questions officielles avec leur thème');
+assert.ok(all.every((q) => q.explanation), 'chaque question a une explication');
+assert.ok(all.every((q) => q.more && q.more.k && q.more.c && q.more.s), '« En savoir plus » complet');
 
-// « En savoir plus » : toutes les questions officielles ont un complément et une source
-assert.ok(E.allQuestions(off).every((q) => q.more && q.more.k && q.more.c && q.more.s), 'compléments officiels');
-assert.ok(E.allQuestions(std).every((q) => q.more && q.more.k && q.more.c && q.more.s), 'compléments complémentaires');
-// ...et le complément suit la question dans l'historique (instantané) puis en reprise
-{
-  const q = off.histoire.questions[0];
-  const it = E.present(q, E.makeRng(5));
-  it.chosen = it.correctIndex;
-  const snap = E.snapshotItem(it);
-  assert.deepStrictEqual(snap.m, q.more);
-  assert.deepStrictEqual(E.questionFromSnapshot(snap).more, q.more);
-  const plain = E.snapshotItem(E.present(std.culture.questions.find((x) => !x.more) || std.culture.questions[0], E.makeRng(6)));
-  assert.ok(!('m' in plain) || plain.m, 'sans complément : pas de champ vide');
-}
+// ------------------------------------------------------------------ équilibre des choix
+// Les fausses réponses ne doivent pas trahir la bonne : la bonne réponse ne doit pas être
+// systématiquement la plus longue. Le hasard donne environ 25 %.
+const longest = all.filter((q) => q.answer.length > Math.max(...q.wrong.map((w) => w.length)));
+const ratio = longest.length / all.length;
+assert.ok(ratio <= 0.35, `la bonne réponse est la plus longue dans ${Math.round(100 * ratio)} % des questions (max 35 %)`);
+const standout = all.filter((q) => q.answer.length > 14 && q.answer.length >= 1.3 * Math.max(...q.wrong.map((w) => w.length)));
+assert.ok(standout.length <= Math.ceil(all.length * 0.03),
+  `${standout.length} questions où la bonne réponse dépasse nettement les autres : ${standout.slice(0, 3).map((q) => q.text).join(' | ')}`);
+// les 3 fausses réponses sont toutes différentes de la bonne et entre elles
+assert.ok(all.every((q) => new Set([q.answer, ...q.wrong]).size === 4));
 
-// simulation : 40 questions uniques, équilibrées
-for (const bank of [std, off]) {
-  const sim = E.buildSimulation(bank, E.makeRng(1));
+// ------------------------------------------------------------------ simulation et tirages
+for (let seed = 1; seed <= 5; seed++) {
+  const sim = E.buildSimulation(bank, E.makeRng(seed));
   assert.strictEqual(sim.length, 40);
   assert.strictEqual(new Set(sim.map((q) => q.id)).size, 40);
   const counts = {};
   sim.forEach((q) => { counts[q.category] = (counts[q.category] || 0) + 1; });
   Object.values(counts).forEach((n) => assert.ok(n === 5 || n === 6, JSON.stringify(counts)));
 }
+assert.strictEqual(E.pickBatch(bank.geographie.questions, 30, E.makeRng(2)).length, bank.geographie.questions.length);
 
-// pickBatch plafonné au nombre de questions disponibles
-assert.strictEqual(E.pickBatch(off.geographie.questions, 30, E.makeRng(2)).length, 22);
-
-// présentation : la bonne réponse suit le mélange
+// la bonne réponse suit le mélange
 const rng = E.makeRng(3);
-E.allQuestions(std).slice(0, 50).forEach((q) => {
+all.forEach((q) => {
   const it = E.present(q, rng);
   assert.strictEqual(it.options[it.correctIndex], q.answer);
   assert.strictEqual(new Set(it.options).size, 4);
 });
+// la position de la bonne réponse est équilibrée (A à D)
+const pos = [0, 0, 0, 0];
+const rng2 = E.makeRng(11);
+for (let i = 0; i < 4000; i++) pos[E.present(all[i % all.length], rng2).correctIndex] += 1;
+pos.forEach((n) => assert.ok(n > 800 && n < 1200, `position de la bonne réponse : ${pos}`));
 
-// historique : série, reprises, erreurs restantes
+// ------------------------------------------------------------------ historique, reprises, maîtrise
 const mem = {};
 const storage = { getItem: (k) => (k in mem ? mem[k] : null), setItem: (k, v) => { mem[k] = v; } };
 const store = new E.Store(storage);
 const answer = (it, wrong) => { it.chosen = wrong ? (it.correctIndex + 1) % 4 : it.correctIndex; return it; };
 
-const qs = E.pickBatch(std.histoire.questions, 10, E.makeRng(4));
+const qs = E.pickBatch(bank.histoire.questions, 10, E.makeRng(4));
 let items = qs.map((q, i) => answer(E.present(q, rng), i % 2 === 0));
 const sid = store.recordSession('categorie', 'Histoire (10 questions)', items, 61.4);
 let entry = store.findSeries(sid);
@@ -71,9 +69,10 @@ assert.strictEqual(entry.score, 5);
 assert.strictEqual(entry.seconds, 61);
 assert.strictEqual(E.remainingErrors(entry.attempts).length, 5);
 assert.strictEqual(Object.keys(store.data.missed).length, 5);
+assert.ok(entry.attempts[0].items.every((s) => s.m && s.m.s), 'le complément suit la question dans l\'historique');
 
-// reprise : 1 erreur de plus, puis tout juste
 let errs = E.remainingErrors(entry.attempts).map(E.questionFromSnapshot);
+assert.ok(errs.every((q) => q.more), 'le complément survit à la reprise');
 items = errs.map((q, i) => answer(E.present(q, rng), i === 0));
 assert.strictEqual(store.recordAttempt(sid, items, 20), 2);
 assert.strictEqual(E.remainingErrors(entry.attempts).length, 1);
@@ -85,46 +84,42 @@ assert.deepStrictEqual(entry.attempts.map((a) => a.score), [5, 4, 1]);
 assert.strictEqual(Object.keys(store.data.missed).length, 0);
 assert.strictEqual(entry.score, 5, 'le score initial reste celui de la 1re tentative');
 
-// les reprises n'entrent pas dans les statistiques
-const rates = store.categoryRates(std);
-assert.deepStrictEqual(rates.histoire, [5, 10]);
-
-// maîtrise : 10 questions vues dont toutes maîtrisées après correction des erreurs
-let m = store.mastery(std).histoire;
-assert.deepStrictEqual([m.seen, m.mastered, m.total], [10, 10, 40]);
-// une erreur non corrigée fait baisser la maîtrise, sans toucher aux catégories non travaillées
+// maîtrise : 10 questions vues, toutes maîtrisées après correction des erreurs
+let m = store.mastery(bank).histoire;
+assert.deepStrictEqual([m.seen, m.mastered, m.total], [10, 10, bank.histoire.questions.length]);
 const lone = new E.Store({ getItem: () => null, setItem: () => {} });
-const sample4 = E.pickBatch(std.culture.questions, 4, E.makeRng(9)).map((q, i) => answer(E.present(q, rng), i === 0));
+const sample4 = E.pickBatch(bank.culture.questions, 4, E.makeRng(9)).map((q, i) => answer(E.present(q, rng), i === 0));
 lone.recordSession('categorie', 'Culture', sample4, 10);
-m = lone.mastery(std).culture;
-assert.deepStrictEqual([m.seen, m.mastered, m.total], [4, 3, 40]);
-assert.deepStrictEqual(lone.mastery(std).histoire, { seen: 0, mastered: 0, total: 40 });
-// réussir plus tard la question ratée la rend maîtrisée
-const missedQ = lone.missedQuestions(std)[0];
+m = lone.mastery(bank).culture;
+assert.deepStrictEqual([m.seen, m.mastered], [4, 3]);
+assert.deepStrictEqual(lone.mastery(bank).histoire, { seen: 0, mastered: 0, total: bank.histoire.questions.length });
+const missedQ = lone.missedQuestions(bank)[0];
 lone.recordSession('revision', 'Révision', [answer(E.present(missedQ, rng), false)], 3);
-m = lone.mastery(std).culture;
+m = lone.mastery(bank).culture;
 assert.deepStrictEqual([m.seen, m.mastered], [4, 4]);
 
-// persistance
+// les reprises n'entrent pas dans les statistiques de la 1re tentative
+assert.deepStrictEqual(store.categoryRates(bank).histoire, [5, 10]);
+
+// persistance et stockage indisponible
 const store2 = new E.Store(storage);
 assert.strictEqual(store2.data.history.length, 1);
 assert.strictEqual(store2.data.history[0].attempts.length, 3);
-
-// stockage en échec : pas d'exception, saveOk = false
 const broken = new E.Store({ getItem: () => null, setItem: () => { throw new Error('quota'); } });
 broken.recordSession('categorie', 'x', items, 1);
 assert.strictEqual(broken.saveOk, false);
 
-// import : ancien format d'historique (sans attempts), fusion sans doublon
-const pyHistory = JSON.stringify({
+// ------------------------------------------------------------------ import / export
+const legacy = JSON.stringify({
   history: [{ date: '2026-11-17 17:01', mode: 'categorie', label: 'Culture (10 questions)', score: 8, total: 10, seconds: 112 }],
-  missed: { 'culture-aaaa1111': 2 }, stats: { 'culture-aaaa1111': { ok: 2, ko: 1 } }, prefs: { official: true },
+  missed: { 'culture-aaaa1111': 2 }, stats: { 'culture-aaaa1111': { ok: 2, ko: 1 } }, prefs: {},
 });
-assert.strictEqual(store.importMerge(pyHistory), 1);
-assert.strictEqual(store.importMerge(pyHistory), 0, 'réimport : aucun doublon');
+assert.strictEqual(store.importMerge(legacy), 1);
+assert.strictEqual(store.importMerge(legacy), 0, 'réimport : aucun doublon');
 assert.strictEqual(store.data.history.length, 2);
-assert.strictEqual(store.data.stats['culture-aaaa1111'].ok, 2);
-assert.ok(!('attempts' in store.data.history[0]) || store.data.history[0].attempts);
 assert.throws(() => store.importMerge('{"x":1}'));
+// les identifiants d'anciennes questions absentes de la banque ne cassent rien
+assert.ok(Array.isArray(store.missedQuestions(bank)));
+assert.doesNotThrow(() => store.mastery(bank));
 
-console.log('MOTEUR OK');
+console.log(`MOTEUR ET BANQUE OK (${all.length} questions, bonne réponse la plus longue : ${Math.round(100 * ratio)} %)`);
